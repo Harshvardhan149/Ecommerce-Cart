@@ -1,4 +1,15 @@
-# Use official PHP image with necessary extensions
+# Stage 1: Build dependencies using Composer image
+FROM composer:2 AS composer-build
+
+WORKDIR /app
+
+# Copy only composer files first to cache Docker layer
+COPY composer.json composer.lock ./
+
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader
+
+# Stage 2: Setup Apache + PHP environment
 FROM php:8.2-apache
 
 # Enable Apache mod_rewrite
@@ -9,27 +20,21 @@ RUN apt-get update && apt-get install -y \
     libzip-dev zip unzip \
     && docker-php-ext-install pdo_mysql zip
 
-# Install Composer globally
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+# Copy project files to Apache root
+COPY . /var/www/html
 
-# Set working directory
-WORKDIR /var/www/html
+# Copy vendor folder from Composer build stage
+COPY --from=composer-build /app/vendor /var/www/html/vendor
 
-# Copy project files into container
-COPY . .
-
-# Install Composer dependencies in production mode
-RUN composer install --optimize-autoloader --no-dev
-
-# Set correct permissions
+# Fix permissions
 RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html/storage
+    && chmod -R 755 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Set Apache DocumentRoot to Laravel's public directory
+# Set DocumentRoot to Laravel's public directory
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
 
 # Expose port 80
 EXPOSE 80
 
-# Start Apache
+# Start Apache server
 CMD ["apache2-foreground"]
