@@ -15,18 +15,21 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy project files
+# Copy project files into container
 COPY . .
+
+# Install Composer dependencies in production mode
+RUN composer install --optimize-autoloader --no-dev
 
 # Set correct permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage
 
-# Apache DocumentRoot to public directory
+# Set Apache DocumentRoot to Laravel's public directory
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
 
 # Expose port 80
 EXPOSE 80
 
-# Start Apache server
+# Start Apache
 CMD ["apache2-foreground"]
